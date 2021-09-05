@@ -45,28 +45,9 @@ struct RaidenMode : Mode {
 	virtual void update(float elapsed) override;
 	virtual void draw(glm::uvec2 const &drawable_size) override;
 
-	//----- game state -----
-
-	glm::vec2 court_radius = glm::vec2(7.0f, 5.0f);
-	glm::vec2 paddle_radius = glm::vec2(1.2f, 1.0f);
-	glm::vec2 ball_radius = glm::vec2(0.2f, 0.2f);
-
-	glm::vec2 left_paddle = glm::vec2(-court_radius.x + 0.5f, 0.0f);
-	glm::vec2 right_paddle = glm::vec2( court_radius.x - 0.5f, 0.0f);
-
-	glm::vec2 ball = glm::vec2(0.0f, 0.0f);
-	glm::vec2 ball_velocity = glm::vec2(-1.0f, 0.0f);
-
-	uint32_t left_score = 0;
-	uint32_t right_score = 0;
-
-	float ai_offset = 0.0f;
-	float ai_offset_update = 0.0f;
-
-
 
 	//------ Raiden Game State -----
-
+	glm::vec2 court_radius = glm::vec2(7.0f, 5.0f);
 	glm::vec2 fighter_radius = glm::vec2(0.2f, 0.4f);
 	glm::vec2 bot_fighter = glm::vec2(-court_radius.x + 0.5f, 0.0f);
 	glm::vec2 bot_fighter_speed = glm::vec2(3.0f, 3.0f);
@@ -77,11 +58,6 @@ struct RaidenMode : Mode {
 	void execute_event(float elapsed);
 	void player_shoot();
 	void update_bullet(float elapsed);
-
-	//----- pretty gradient trails -----
-
-	float trail_length = 1.3f;
-	std::deque< glm::vec3 > ball_trail; //stores (x,y,age), oldest elements first
 
 	//----- opengl assets / helpers ------
 

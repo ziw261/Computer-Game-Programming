@@ -9,12 +9,6 @@
 #include <random>
 
 RaidenMode::RaidenMode() {
-
-	//set up trail as if ball has been here for 'forever':
-	ball_trail.clear();
-	ball_trail.emplace_back(ball, trail_length);
-	ball_trail.emplace_back(ball, 0.0f);
-
 	
 	//----- allocate OpenGL resources -----
 	{ //vertex buffer:
@@ -184,77 +178,17 @@ void RaidenMode::update(float elapsed) {
 
 	// Execute Keyboard event
 	execute_event(elapsed);
-
+	
 	// Update bullet
 	update_bullet(elapsed);
 
 	//clamp fighters to court:
+	bot_fighter.x = std::max(bot_fighter.x, -court_radius.x + fighter_radius.x);
+	bot_fighter.x = std::min(bot_fighter.x, court_radius.x - fighter_radius.x);
 	bot_fighter.y = std::max(bot_fighter.y, -court_radius.y + fighter_radius.y);
 	bot_fighter.y = std::min(bot_fighter.y, court_radius.y - fighter_radius.y);
 
 	//---- collision handling ----
-
-	//paddles:
-	auto paddle_vs_ball = [this](glm::vec2 const &paddle) {
-		//compute area of overlap:
-		glm::vec2 min = glm::max(paddle - paddle_radius, ball - ball_radius);
-		glm::vec2 max = glm::min(paddle + paddle_radius, ball + ball_radius);
-
-		//if no overlap, no collision:
-		if (min.x > max.x || min.y > max.y) return;
-
-		if (max.x - min.x > max.y - min.y) {
-			//wider overlap in x => bounce in y direction:
-			if (ball.y > paddle.y) {
-				ball.y = paddle.y + paddle_radius.y + ball_radius.y;
-				ball_velocity.y = std::abs(ball_velocity.y);
-			} else {
-				ball.y = paddle.y - paddle_radius.y - ball_radius.y;
-				ball_velocity.y = -std::abs(ball_velocity.y);
-			}
-		} else {
-			//wider overlap in y => bounce in x direction:
-			if (ball.x > paddle.x) {
-				ball.x = paddle.x + paddle_radius.x + ball_radius.x;
-				ball_velocity.x = std::abs(ball_velocity.x);
-			} else {
-				ball.x = paddle.x - paddle_radius.x - ball_radius.x;
-				ball_velocity.x = -std::abs(ball_velocity.x);
-			}
-			//warp y velocity based on offset from paddle center:
-			float vel = (ball.y - paddle.y) / (paddle_radius.y + ball_radius.y);
-			ball_velocity.y = glm::mix(ball_velocity.y, vel, 0.75f);
-		}
-	};
-
-	//court walls:
-	if (ball.y > court_radius.y - ball_radius.y) {
-		ball.y = court_radius.y - ball_radius.y;
-		if (ball_velocity.y > 0.0f) {
-			ball_velocity.y = -ball_velocity.y;
-		}
-	}
-	if (ball.y < -court_radius.y + ball_radius.y) {
-		ball.y = -court_radius.y + ball_radius.y;
-		if (ball_velocity.y < 0.0f) {
-			ball_velocity.y = -ball_velocity.y;
-		}
-	}
-
-	if (ball.x > court_radius.x - ball_radius.x) {
-		ball.x = court_radius.x - ball_radius.x;
-		if (ball_velocity.x > 0.0f) {
-			ball_velocity.x = -ball_velocity.x;
-			left_score += 1;
-		}
-	}
-	if (ball.x < -court_radius.x + ball_radius.x) {
-		ball.x = -court_radius.x + ball_radius.x;
-		if (ball_velocity.x < 0.0f) {
-			ball_velocity.x = -ball_velocity.x;
-			right_score += 1;
-		}
-	}
 }
 
 void RaidenMode::draw(glm::uvec2 const &drawable_size) {
@@ -292,7 +226,7 @@ void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 		vertices.emplace_back(glm::vec3(center.x-radius.x, center.y+radius.y, 0.0f), color, glm::vec2(0.5f, 0.5f));
 	};
 
-	//inline helper function for triangle drawing:
+	//inline helper function for diamod shape drawing:
 	auto draw_diamond = [&vertices](glm::vec2 const& center, glm::vec2 const& radius, glm::u8vec4 const& color) {
 		//draw triangle with all equal size.
 		vertices.emplace_back(glm::vec3(center.x-radius.x, center.y, 0.0f), color, glm::vec2(0.5f, 0.5f));
@@ -325,19 +259,19 @@ void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 
 	glm::vec2 s = glm::vec2(0.0f,-shadow_offset);
 
-	draw_rectangle(glm::vec2(-court_radius.x-wall_radius, 0.0f)+s, glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), shadow_color);
-	draw_rectangle(glm::vec2( court_radius.x+wall_radius, 0.0f)+s, glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), shadow_color);
-	draw_rectangle(glm::vec2( 0.0f,-court_radius.y-wall_radius)+s, glm::vec2(court_radius.x, wall_radius), shadow_color);
-	draw_rectangle(glm::vec2( 0.0f, court_radius.y+wall_radius)+s, glm::vec2(court_radius.x, wall_radius), shadow_color);
+	//draw_rectangle(glm::vec2(-court_radius.x-wall_radius, 0.0f)+s, glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), shadow_color);
+	//draw_rectangle(glm::vec2( court_radius.x+wall_radius, 0.0f)+s, glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), shadow_color);
+	//draw_rectangle(glm::vec2( 0.0f,-court_radius.y-wall_radius)+s, glm::vec2(court_radius.x, wall_radius), shadow_color);
+	//draw_rectangle(glm::vec2( 0.0f, court_radius.y+wall_radius)+s, glm::vec2(court_radius.x, wall_radius), shadow_color);
 	draw_diamond(bot_fighter+s, fighter_radius, shadow_color);
 
 	//solid objects:
 
 	//walls:
-	draw_rectangle(glm::vec2(-court_radius.x-wall_radius, 0.0f), glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), fg_color);
-	draw_rectangle(glm::vec2( court_radius.x+wall_radius, 0.0f), glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), fg_color);
-	draw_rectangle(glm::vec2( 0.0f,-court_radius.y-wall_radius), glm::vec2(court_radius.x, wall_radius), fg_color);
-	draw_rectangle(glm::vec2( 0.0f, court_radius.y+wall_radius), glm::vec2(court_radius.x, wall_radius), fg_color);
+	//draw_rectangle(glm::vec2(-court_radius.x-wall_radius, 0.0f), glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), fg_color);
+	//draw_rectangle(glm::vec2( court_radius.x+wall_radius, 0.0f), glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), fg_color);
+	//draw_rectangle(glm::vec2( 0.0f,-court_radius.y-wall_radius), glm::vec2(court_radius.x, wall_radius), fg_color);
+	//draw_rectangle(glm::vec2( 0.0f, court_radius.y+wall_radius), glm::vec2(court_radius.x, wall_radius), fg_color);
 
 	//Game objects:
 	draw_figher();
@@ -353,7 +287,7 @@ void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 	);
 	glm::vec2 scene_max = glm::vec2(
 		court_radius.x + 2.0f * wall_radius + padding,
-		court_radius.y + 2.0f * wall_radius + 3.0f +padding
+		court_radius.y + 2.0f * wall_radius + padding
 	);
 
 	//compute window aspect ratio:

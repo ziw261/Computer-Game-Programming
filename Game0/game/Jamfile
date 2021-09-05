@@ -128,4 +128,4 @@ LOCATE_TARGET = objs ; #put objects in 'objs' directory
 Objects $(GAME_NAMES:S=.cpp) ;
 
 LOCATE_TARGET = dist ; #put main in 'dist' directory
-MainFromObjects pong : $(GAME_NAMES:S=$(SUFOBJ)) ;
+MainFromObjects 9S's_Raiden_Adventure : $(GAME_NAMES:S=$(SUFOBJ)) ;
