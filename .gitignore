@@ -1,32 +1,11 @@
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
+**/objs/
+**/dist/README-SDL.txt
+**/dist/pong.ilk
+**/dist/pong.pdb
+**/dist/SDL2.dll
+**/dist/pong
+**/dist/pong.exe
+**/.vs
+**/.vscode
+**/dist/README-glm.txt
+**/dist/README-libpng.txt
