@@ -1,11 +1,5 @@
-**/objs/
-**/dist/README-SDL.txt
-**/dist/pong.ilk
-**/dist/pong.pdb
-**/dist/SDL2.dll
-**/dist/pong
-**/dist/pong.exe
+/Game0/game/objs/
+/Game0/game/dist/
 **/.vs
 **/.vscode
-**/dist/README-glm.txt
-**/dist/README-libpng.txt
+
