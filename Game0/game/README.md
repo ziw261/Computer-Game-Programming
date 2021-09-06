@@ -3,7 +3,9 @@
 Author: Zi Wang
 
 Design: \
-It is a classic Raiden type shooting game. But, the bullets you shoot, will bounce around in the scene and hurt you when it gets you. Keep shooting might make yourselve more difficult.
+It is a classic Raiden type shooting game. But, the bullets you shoot, will bounce around in the scene and will hurt you when it gets you. Keep shooting might make yourselve more difficult.\
+Enemies spawn by waves, following points that composite a route. However, everthing, the number of enemies, the routes they follow are totally randomized.\
+Whenver you kill a nubmer of enemies, the game diffficulty level will increase. See how long you can hold!
 
 Screen Shot:
 

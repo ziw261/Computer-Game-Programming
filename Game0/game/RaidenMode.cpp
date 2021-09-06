@@ -139,7 +139,7 @@ void RaidenMode::generate_enemies(float elapsed) {
 			all_enemies[index].enemy_velocity = glm::vec2(0);
 			all_enemies[index].enemy_collision_box = glm::vec4(0);
 			all_enemies[index].curr_enemy_shoot_cool_down = ENEMY_SHOOT_COOLDOWN;
-			all_enemies[index].enemy_health = ENEMY_HEALTH + game_difficulty_mode;
+			all_enemies[index].enemy_health = ENEMY_HEALTH + game_difficulty_mode * 0.1f;
 			all_enemies[index].enemy_route = curr_route;
 			all_enemies[index].route_index = 0;
 			all_enemies[index].is_in_pool = false;
@@ -147,7 +147,7 @@ void RaidenMode::generate_enemies(float elapsed) {
 		else
 		{
 			Enemy e(glm::vec2(0.0f, COURT_RADIUS.y - 0.5f), curr_route);
-			e.enemy_health += game_difficulty_mode;
+			e.enemy_health = ENEMY_HEALTH + game_difficulty_mode * 0.1f;
 			all_enemies.push_back(e);
 		}
 		route_change_counter = (route_change_counter + 1) % ROUTE_CHANGE_RATE;

@@ -10,7 +10,7 @@
 
 #define BULLET_LIFETIME 5.0f
 #define PLAYER_HEALTH 50.0f
-#define ENEMY_HEALTH 5.0f
+#define ENEMY_HEALTH 1.0f
 #define BULLET_DAMAGE 5.0f
 #define PLAYER_SPEED 5.0f
 #define ENEMY_SPEED 5.0f
