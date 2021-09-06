@@ -111,28 +111,44 @@ RaidenMode::~RaidenMode() {
 }
 
 void RaidenMode::debug_log() {
-	std::cout << route_change_counter << std::endl;
 	std::cout << all_enemies.size() << std::endl;
+	std::cout << enemy_pool.size() << std::endl;
 }
 
 void RaidenMode::generate_enemies(float elapsed) {
 
-	if (all_enemies.size() >= ENEMY_MAX_NUM)
+	if ((all_enemies.size() - enemy_pool.size()) >= ENEMY_MAX_NUM)
 		return;
 	else if (curr_enemy_spawn_cool_down > 0)
 	{
 		curr_enemy_spawn_cool_down -= elapsed;
 		return;
 	}
-	else if (all_enemies.size() <= ENEMY_NEED_SPAWN_NUM
+	else if ((all_enemies.size() - enemy_pool.size()) <= ENEMY_NEED_SPAWN_NUM
 		|| (mt() % 100) < ENEMY_SPAWN_POSSIBILITY)
 	{
 		if (route_change_counter == ROUTE_CHANGE_RATE - 1)
 		{
 			curr_route = EnemyRoute();
 		}
-		Enemy e(glm::vec2(0.0f, COURT_RADIUS.y - 0.5f), curr_route);
-		all_enemies.push_back(e);
+		if (!enemy_pool.empty())
+		{
+			int index = enemy_pool.front();
+			enemy_pool.pop_front();
+			all_enemies[index].enemy_position = glm::vec2(0.0f, COURT_RADIUS.y - 0.5f);
+			all_enemies[index].enemy_velocity = glm::vec2(0);
+			all_enemies[index].enemy_collision_box = glm::vec4(0);
+			all_enemies[index].curr_enemy_shoot_cool_down = ENEMY_SHOOT_COOLDOWN;
+			all_enemies[index].enemy_health = ENEMY_HEALTH;
+			all_enemies[index].enemy_route = curr_route;
+			all_enemies[index].route_index = 0;
+			all_enemies[index].is_in_pool = false;
+		}
+		else
+		{
+			Enemy e(glm::vec2(0.0f, COURT_RADIUS.y - 0.5f), curr_route);
+			all_enemies.push_back(e);
+		}
 		route_change_counter = (route_change_counter + 1) % ROUTE_CHANGE_RATE;
 		curr_enemy_spawn_cool_down = ENEMY_SPAWN_COOL_DOWN;
 	}
@@ -140,6 +156,8 @@ void RaidenMode::generate_enemies(float elapsed) {
 
 void RaidenMode::update_enemies(float elapsed) {
 	for (auto& e : all_enemies) {
+		if (e.is_in_pool)
+			continue;
 		if (e.enemy_position.x >= e.enemy_route.route_points[e.route_index].x - 0.1f
 			&& e.enemy_position.x <= e.enemy_route.route_points[e.route_index].x + 0.1f
 			&& e.enemy_position.y >= e.enemy_route.route_points[e.route_index].y - 0.1f
@@ -151,11 +169,12 @@ void RaidenMode::update_enemies(float elapsed) {
 		if (e.enemy_velocity != glm::vec2(0))
 		{
 			e.enemy_position += glm::normalize(e.enemy_velocity) * elapsed * ENEMY_SPEED;
-			e.enemy_collision_box = glm::vec4(e.enemy_position.x - e.enemy_radius.x,
-				e.enemy_position.x + e.enemy_radius.x,
-				e.enemy_position.y + e.enemy_radius.y + 0.05f * 0.75f,
-				e.enemy_position.y - e.enemy_radius.y);
+
 		}
+		e.enemy_collision_box = glm::vec4(e.enemy_position.x - e.enemy_radius.x,
+			e.enemy_position.x + e.enemy_radius.x,
+			e.enemy_position.y - e.enemy_radius.y,
+			e.enemy_position.y + e.enemy_radius.y + 0.05f * 0.75f);
 	}
 }
 
@@ -219,11 +238,12 @@ void RaidenMode::execute_event(float elapsed) {
 
 	if (movement != glm::vec2(0)) {
 		bot_fighter += glm::normalize(movement) * elapsed * PLAYER_SPEED;
-		player_collision_box = glm::vec4(bot_fighter.x - fighter_radius.x, 
-										bot_fighter.x + fighter_radius.x,
-										bot_fighter.y - fighter_radius.y - 0.05f,
-										bot_fighter.y + fighter_radius.y);
 	}
+
+	player_collision_box = glm::vec4(bot_fighter.x - fighter_radius.x,
+		bot_fighter.x + fighter_radius.x,
+		bot_fighter.y - fighter_radius.y - 0.05f,
+		bot_fighter.y + fighter_radius.y);
 }
 
 void RaidenMode::enemy_shoot(float elapsed) {
@@ -232,6 +252,10 @@ void RaidenMode::enemy_shoot(float elapsed) {
 		if (e.curr_enemy_shoot_cool_down > 0)
 		{
 			e.curr_enemy_shoot_cool_down -= elapsed;
+			continue;
+		}
+		else if (e.is_in_pool)
+		{
 			continue;
 		}
 		else
@@ -277,8 +301,8 @@ void RaidenMode::player_shoot() {
 bool RaidenMode::check_collision(const std::vector<glm::vec2>& points, const glm::vec4& box) {
 	for (int i = 0; i < points.size(); i++)
 	{
-		if (points[i].x >= player_collision_box[0] && points[i].x <= player_collision_box[1]
-			&& points[i].y >= player_collision_box[2] && points[i].y <= player_collision_box[3])
+		if (points[i].x >= box[0] && points[i].x <= box[1]
+			&& points[i].y >= box[2] && points[i].y <= box[3])
 		{
 			return true;
 		}
@@ -293,7 +317,7 @@ void RaidenMode::update_bullet(float elapsed, int random) {
 		if (b.in_bullet_pool)
 			continue;
 
-		if (b.bullet_lifetime <= 0 && !b.in_bullet_pool)
+		if (b.bullet_lifetime <= 0)
 		{
 			bullet_pool.push_back(i);
 			b.in_bullet_pool = true;
@@ -355,12 +379,45 @@ void RaidenMode::update_bullet(float elapsed, int random) {
 					bullet_pool.push_back(i);
 					b.in_bullet_pool = true;
 					std::cout << "Player hit" << std::endl;
+					player_health -= BULLET_DAMAGE;
+				}
+
+				if (b.owner == 0)
+				{
+					for (int index = 0; index < all_enemies.size(); index++)
+					{
+						if (!all_enemies[index].is_in_pool && check_collision(points, all_enemies[index].enemy_collision_box))
+						{
+							//std::cout << "enemy hit" << std::endl;
+							bullet_pool.push_back(i);
+							b.in_bullet_pool = true;
+							all_enemies[index].enemy_health -= BULLET_DAMAGE;
+							if (all_enemies[index].enemy_health <= 0)
+							{
+								enemy_pool.push_back(index);
+								all_enemies[index].is_in_pool = true;
+								//std::cout << "enemy dead" << std::endl;
+							}
+						}
+					}
 				}
 			}
 
 			b.bullet_lifetime -= elapsed;
 		}
 	}
+}
+
+void RaidenMode::check_health() {
+	//size_t length = all_enemies.size() - 1;
+	//for (size_t i = length; i >= 0; i--)
+	//{
+	//	if (all_enemies[i].enemy_health <= 0)
+	//	{
+	//		all_enemies.erase(all_enemies.begin() + i);
+	//		i--;
+	//	}
+	//}
 }
 
 void RaidenMode::update(float elapsed) {
@@ -387,7 +444,7 @@ void RaidenMode::update(float elapsed) {
 	generate_enemies(elapsed);
 	update_enemies(elapsed);
 	enemy_shoot(elapsed);
-	
+	check_health();
 }
 
 void RaidenMode::draw(glm::uvec2 const &drawable_size) {
@@ -461,7 +518,8 @@ void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 	{
 		for (const auto& e : all_enemies)
 		{
-			draw_figher(e.enemy_position, e.enemy_radius, enemy_color, -1);
+			if (!e.is_in_pool)
+				draw_figher(e.enemy_position, e.enemy_radius, enemy_color, -1);
 		}
 	};
 

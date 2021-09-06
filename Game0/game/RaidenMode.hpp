@@ -89,8 +89,10 @@ struct RaidenMode : Mode {
 		glm::vec2 enemy_velocity = glm::vec2(0);
 		glm::vec4 enemy_collision_box = glm::vec4(0);
 		float curr_enemy_shoot_cool_down = ENEMY_SHOOT_COOLDOWN;
+		float enemy_health = ENEMY_HEALTH;
 		EnemyRoute enemy_route;
 		int route_index = 0;
+		bool is_in_pool = false;
 		Enemy() {}
 		Enemy(glm::vec2 pos, const EnemyRoute& route) : enemy_position(pos), enemy_route(route) {}
 	};
@@ -114,6 +116,8 @@ struct RaidenMode : Mode {
 	std::vector<Bullet> all_bullets;
 	std::deque<int> bullet_pool;
 	std::vector<Enemy> all_enemies;
+	std::deque<int> enemy_pool;
+	float player_health = PLAYER_HEALTH;
 	void execute_event(float elapsed);
 	void player_shoot();
 	void enemy_shoot(float elapsed);
@@ -121,6 +125,7 @@ struct RaidenMode : Mode {
 	void generate_enemies(float elapsed);
 	void update_enemies(float elapsed);
 	bool check_collision(const std::vector<glm::vec2>& points, const glm::vec4& box);
+	void check_health();
 	void debug_log();
 
 
