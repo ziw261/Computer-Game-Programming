@@ -1,8 +1,9 @@
-# (TODO: your game's title)
+# 9S's Raiden Adventure
 
-Author: (TODO: your name)
+Author: Zi Wang
 
-Design: (TODO: In two sentences or fewer, describe what is new and interesting about your game.)
+Design: 
+It is a classic Raiden type shooting game. But, the bullets you shoot, will bounce around in the scene and hurt you when it gets you. Keep shooting might make yourselve more difficult.
 
 Screen Shot:
 
@@ -10,8 +11,11 @@ Screen Shot:
 
 How To Play:
 
-(TODO: describe the controls and (if needed) goals/strategy.)
+WASD/UP DOWN LEFT RIGHT to move
+SPACE to shoot
+R to reset the game
+ESCAPE to close the game
 
-Sources: (TODO: list a source URL for any assets you did not create yourself. Make sure you have a license for the asset.)
+Sources: 
 
 This game was built with [NEST](NEST.md).
