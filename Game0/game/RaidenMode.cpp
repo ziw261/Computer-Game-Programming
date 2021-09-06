@@ -6,7 +6,6 @@
 //for glm::value_ptr() :
 #include <glm/gtc/type_ptr.hpp>
 
-#include <random>
 
 RaidenMode::RaidenMode() {
 	
@@ -96,11 +95,6 @@ RaidenMode::RaidenMode() {
 
 		GL_ERRORS(); //PARANOIA: print out any OpenGL errors that may have happened
 	}
-
-	// Generate Enemies
-	{
-		generate_enemies();
-	}
 }
 
 RaidenMode::~RaidenMode() {
@@ -116,8 +110,53 @@ RaidenMode::~RaidenMode() {
 	white_tex = 0;
 }
 
-void RaidenMode::generate_enemies() {
-	all_enemies.push_back(Enemy());
+void RaidenMode::debug_log() {
+	std::cout << route_change_counter << std::endl;
+	std::cout << all_enemies.size() << std::endl;
+}
+
+void RaidenMode::generate_enemies(float elapsed) {
+
+	if (all_enemies.size() >= ENEMY_MAX_NUM)
+		return;
+	else if (curr_enemy_spawn_cool_down > 0)
+	{
+		curr_enemy_spawn_cool_down -= elapsed;
+		return;
+	}
+	else if (all_enemies.size() <= ENEMY_NEED_SPAWN_NUM
+		|| (mt() % 100) < ENEMY_SPAWN_POSSIBILITY)
+	{
+		if (route_change_counter == ROUTE_CHANGE_RATE - 1)
+		{
+			curr_route = EnemyRoute();
+		}
+		Enemy e(glm::vec2(0.0f, COURT_RADIUS.y - 0.5f), curr_route);
+		all_enemies.push_back(e);
+		route_change_counter = (route_change_counter + 1) % ROUTE_CHANGE_RATE;
+		curr_enemy_spawn_cool_down = ENEMY_SPAWN_COOL_DOWN;
+	}
+}
+
+void RaidenMode::update_enemies(float elapsed) {
+	for (auto& e : all_enemies) {
+		if (e.enemy_position.x >= e.enemy_route.route_points[e.route_index].x - 0.1f
+			&& e.enemy_position.x <= e.enemy_route.route_points[e.route_index].x + 0.1f
+			&& e.enemy_position.y >= e.enemy_route.route_points[e.route_index].y - 0.1f
+			&& e.enemy_position.y <= e.enemy_route.route_points[e.route_index].y + 0.1f)
+		{
+			e.route_index = (e.route_index + 1) % e.enemy_route.route_length;
+		}
+		e.enemy_velocity = e.enemy_route.route_points[e.route_index] - e.enemy_position;
+		if (e.enemy_velocity != glm::vec2(0))
+		{
+			e.enemy_position += glm::normalize(e.enemy_velocity) * elapsed * ENEMY_SPEED;
+			e.enemy_collision_box = glm::vec4(e.enemy_position.x - e.enemy_radius.x,
+				e.enemy_position.x + e.enemy_radius.x,
+				e.enemy_position.y + e.enemy_radius.y + 0.05f * 0.75f,
+				e.enemy_position.y - e.enemy_radius.y);
+		}
+	}
 }
 
 bool RaidenMode::handle_event(SDL_Event const& evt, glm::uvec2 const& window_size) {
@@ -187,19 +226,50 @@ void RaidenMode::execute_event(float elapsed) {
 	}
 }
 
+void RaidenMode::enemy_shoot(float elapsed) {
+	for (auto& e : all_enemies)
+	{
+		if (e.curr_enemy_shoot_cool_down > 0)
+		{
+			e.curr_enemy_shoot_cool_down -= elapsed;
+			continue;
+		}
+		else
+		{
+			if (!bullet_pool.empty())
+			{
+				int index = bullet_pool.front();
+				bullet_pool.pop_front();
+				all_bullets[index].bullet_position = glm::vec2(e.enemy_position.x, e.enemy_position.y - e.enemy_radius.y - 0.05f);
+				all_bullets[index].shoot_dir = -1;
+				all_bullets[index].owner = 1;
+				all_bullets[index].bullet_velocity = glm::vec2(0.0f, all_bullets[index].shoot_dir * 1.0f);
+				all_bullets[index].bullet_lifetime = BULLET_LIFETIME;
+				all_bullets[index].in_bullet_pool = false;
+			}
+
+			Bullet b(glm::vec2(e.enemy_position.x, e.enemy_position.y - e.enemy_radius.y - 0.05f), 7.0f, 1, -1);
+			all_bullets.push_back(b);
+			e.curr_enemy_shoot_cool_down = ENEMY_SHOOT_COOLDOWN;
+		}
+	}
+}
+
 void RaidenMode::player_shoot() {
 	if (!bullet_pool.empty())
 	{
 		int index = bullet_pool.front();
 		bullet_pool.pop_front();
 		all_bullets[index].bullet_position = glm::vec2(bot_fighter.x, bot_fighter.y + fighter_radius.y + 0.05f);
+		all_bullets[index].shoot_dir = 1;
+		all_bullets[index].owner = 0;
 		all_bullets[index].bullet_velocity = glm::vec2(0.0f, all_bullets[index].shoot_dir * 1.0f);
 		all_bullets[index].bullet_lifetime = BULLET_LIFETIME;
 		all_bullets[index].in_bullet_pool = false;
 	}
 	else
 	{
-		Bullet b(glm::vec2(bot_fighter.x, bot_fighter.y + fighter_radius.y + 0.05f), 7.0f);
+		Bullet b(glm::vec2(bot_fighter.x, bot_fighter.y + fighter_radius.y + 0.05f), 7.0f, 0, 1);
 		all_bullets.push_back(b);
 	}
 }
@@ -216,7 +286,7 @@ bool RaidenMode::check_collision(const std::vector<glm::vec2>& points, const glm
 	return false;
 }
 
-void RaidenMode::update_bullet(float elapsed) {
+void RaidenMode::update_bullet(float elapsed, int random) {
 	for (int i=0; i<all_bullets.size(); i++)
 	{
 		Bullet& b = all_bullets[i];
@@ -231,41 +301,44 @@ void RaidenMode::update_bullet(float elapsed) {
 		else
 		{
 			b.bullet_position += b.bullet_speed * b.bullet_velocity * elapsed;
-			if (b.bullet_position.y > COURT_RADIUS.y - b.bullet_radius.y)
+			if (b.owner == 0)
 			{
-				b.bullet_position.y = COURT_RADIUS.y - b.bullet_radius.y;
-				if (b.bullet_velocity.y > 0.0f)
+				if (b.bullet_position.y > COURT_RADIUS.y - b.bullet_radius.y)
 				{
-					b.bullet_velocity.y = -b.bullet_velocity.y;
-					b.bullet_velocity.x = BULLET_DEVIATION_VALUE;
+					b.bullet_position.y = COURT_RADIUS.y - b.bullet_radius.y;
+					if (b.bullet_velocity.y > 0.0f)
+					{
+						b.bullet_velocity.y = -b.bullet_velocity.y;
+						b.bullet_velocity.x -= BULLET_DEVIATION_VALUE * random;
+					}
 				}
-			}
-			if (b.bullet_position.y < -COURT_RADIUS.y + b.bullet_radius.y)
-			{
-				b.bullet_position.y = -COURT_RADIUS.y + b.bullet_radius.y;
-				if (b.bullet_velocity.y < 0.0f)
+				if (b.bullet_position.y < -COURT_RADIUS.y + b.bullet_radius.y)
 				{
-					b.bullet_velocity.y = -b.bullet_velocity.y;
-					b.bullet_velocity.x = -BULLET_DEVIATION_VALUE;
+					b.bullet_position.y = -COURT_RADIUS.y + b.bullet_radius.y;
+					if (b.bullet_velocity.y < 0.0f)
+					{
+						b.bullet_velocity.y = -b.bullet_velocity.y;
+						b.bullet_velocity.x += -BULLET_DEVIATION_VALUE * random;
+					}
 				}
-			}
 
-			if (b.bullet_position.x > COURT_RADIUS.x - b.bullet_radius.x)
-			{
-				b.bullet_position.x = COURT_RADIUS.x - b.bullet_radius.x;
-				if (b.bullet_velocity.x > 0.0f)
+				if (b.bullet_position.x > COURT_RADIUS.x - b.bullet_radius.x)
 				{
-					b.bullet_velocity.x = -b.bullet_velocity.x;
-					b.bullet_velocity.y = BULLET_DEVIATION_VALUE;
+					b.bullet_position.x = COURT_RADIUS.x - b.bullet_radius.x;
+					if (b.bullet_velocity.x > 0.0f)
+					{
+						b.bullet_velocity.x = -b.bullet_velocity.x;
+						b.bullet_velocity.y -= BULLET_DEVIATION_VALUE * random;
+					}
 				}
-			}
-			if (b.bullet_position.x < -COURT_RADIUS.x + b.bullet_radius.x)
-			{
-				b.bullet_position.x = -COURT_RADIUS.x + b.bullet_radius.x;
-				if (b.bullet_velocity.x < 0.0f)
+				if (b.bullet_position.x < -COURT_RADIUS.x + b.bullet_radius.x)
 				{
-					b.bullet_velocity.x = -b.bullet_velocity.x;
-					b.bullet_velocity.y = -BULLET_DEVIATION_VALUE;
+					b.bullet_position.x = -COURT_RADIUS.x + b.bullet_radius.x;
+					if (b.bullet_velocity.x < 0.0f)
+					{
+						b.bullet_velocity.x = -b.bullet_velocity.x;
+						b.bullet_velocity.y += -BULLET_DEVIATION_VALUE * random;
+					}
 				}
 			}
 
@@ -292,13 +365,16 @@ void RaidenMode::update_bullet(float elapsed) {
 
 void RaidenMode::update(float elapsed) {
 
-	static std::mt19937 mt; //mersenne twister pseudo-random number generator
+	//static std::mt19937 mt(std::random_device{}()); //mersenne twister pseudo-random number generator
+
+	//debug_log();
 
 	// Execute Keyboard event
 	execute_event(elapsed);
 	
 	// Update bullet
-	update_bullet(elapsed);
+	int r = mt() % 2 == 0 ? 1 : -1;
+	update_bullet(elapsed, r);
 
 	//clamp fighters to court:
 	bot_fighter.x = std::max(bot_fighter.x, -COURT_RADIUS.x + fighter_radius.x);
@@ -307,9 +383,11 @@ void RaidenMode::update(float elapsed) {
 	bot_fighter.y = std::min(bot_fighter.y, COURT_RADIUS.y - fighter_radius.y);
 	
 
-	//---- collision handling ----
+	// Enemy
+	generate_enemies(elapsed);
+	update_enemies(elapsed);
+	enemy_shoot(elapsed);
 	
-
 }
 
 void RaidenMode::draw(glm::uvec2 const &drawable_size) {

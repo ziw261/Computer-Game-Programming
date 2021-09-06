@@ -4,7 +4,7 @@
 #include "GL.hpp"
 
 #include <glm/glm.hpp>
-
+#include <random>
 #include <vector>
 #include <deque>
 
@@ -15,10 +15,17 @@
 #define PLAYER_SPEED 3.0f
 #define ENEMY_SPEED 5.0f
 #define PLAYER_SHOOT_COOLDOWN 0.1f
-#define ENEMY_SHOOT_COOLDOWN 0.05f
+#define ENEMY_SHOOT_COOLDOWN 1.0f
 #define COURT_RADIUS glm::vec2(7.0f, 5.0f)
-#define BULLET_DEVIATION_VALUE 0.1f
+#define BULLET_DEVIATION_VALUE 0.5f
+#define ENEMY_MAX_NUM 15
+#define ENEMY_NEED_SPAWN_NUM 5
+#define ENEMY_SPAWN_POSSIBILITY 30
+#define ROUTE_CHANGE_RATE 4
+#define ENEMY_SPAWN_COOL_DOWN 0.4f
 
+
+static std::mt19937 mt(std::random_device{}());
 
 enum EventStatus
 {
@@ -54,7 +61,24 @@ struct RaidenMode : Mode {
 		// Bullet lifetime
 		float bullet_lifetime = BULLET_LIFETIME;
 		Bullet() {};
-		Bullet(glm::vec2 pos, float speed) : bullet_position(pos), bullet_speed(speed) {};
+		Bullet(glm::vec2 pos, float speed, int o, int d) : bullet_position(pos), bullet_speed(speed), owner(o), shoot_dir(d) {};
+	};
+
+	//------ Enemy Route ------
+	struct EnemyRoute
+	{
+		//std::mt19937 rng(std::random_device{}());
+		int route_length = mt() % 5 + 10;
+		std::vector<glm::vec2> route_points;
+		EnemyRoute()
+		{
+			for (int i = 0; i < route_length; i++)
+			{
+				float x = (mt() % 100) * 0.01f * COURT_RADIUS.x * 2 - COURT_RADIUS.x;
+				float y = (mt() % 100) * 0.01f * COURT_RADIUS.y;
+				route_points.push_back(glm::vec2(x, y));
+			}
+		}
 	};
 
 	//------ Enemy Struct ------
@@ -62,10 +86,15 @@ struct RaidenMode : Mode {
 	{
 		glm::vec2 enemy_position = glm::vec2(0.0f, COURT_RADIUS.y - 0.5f);
 		glm::vec2 enemy_radius = glm::vec2(0.15f, 0.3f);
+		glm::vec2 enemy_velocity = glm::vec2(0);
+		glm::vec4 enemy_collision_box = glm::vec4(0);
 		float curr_enemy_shoot_cool_down = ENEMY_SHOOT_COOLDOWN;
-		Enemy() {};
-		Enemy(glm::vec2 pos) : enemy_position(pos) {};
+		EnemyRoute enemy_route;
+		int route_index = 0;
+		Enemy() {}
+		Enemy(glm::vec2 pos, const EnemyRoute& route) : enemy_position(pos), enemy_route(route) {}
 	};
+
 
 	//functions called by main loop:
 	virtual bool handle_event(SDL_Event const &, glm::uvec2 const &window_size) override;
@@ -78,16 +107,21 @@ struct RaidenMode : Mode {
 	glm::vec2 bot_fighter = glm::vec2(0.0f, -COURT_RADIUS.y + 0.5f);
 	glm::vec4 player_collision_box = glm::vec4(0);
 	int curr_status = EventStatus::none;
+	int route_change_counter = 0;
+	EnemyRoute curr_route;
 	float curr_player_shoot_cool_down = PLAYER_SHOOT_COOLDOWN;
+	float curr_enemy_spawn_cool_down = ENEMY_SPAWN_COOL_DOWN;
 	std::vector<Bullet> all_bullets;
 	std::deque<int> bullet_pool;
 	std::vector<Enemy> all_enemies;
 	void execute_event(float elapsed);
 	void player_shoot();
-	void update_bullet(float elapsed);
-	void generate_enemies();
+	void enemy_shoot(float elapsed);
+	void update_bullet(float elapsed, int r);
+	void generate_enemies(float elapsed);
+	void update_enemies(float elapsed);
 	bool check_collision(const std::vector<glm::vec2>& points, const glm::vec4& box);
-
+	void debug_log();
 
 
 	//----- opengl assets / helpers ------
