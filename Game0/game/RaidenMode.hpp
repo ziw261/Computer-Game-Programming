@@ -8,15 +8,16 @@
 #include <vector>
 #include <deque>
 
-
-#define BULLET_LIFETIME 5.0f;
-#define PLAYER_HEALTH 20.0f;
-#define ENEMY_HEALTH 10.0f;
-#define BULLET_DAMAGE 5.0f;
-#define PLAYER_SPEED 3.0f;
-#define ENEMY_SPEED 5.0f;
-#define PLAYER_SHOOT_COOLDOWN 0.1f;
-#define ENEMY_SHOOT_COOLDOWN 0.05f;
+#define BULLET_LIFETIME 5.0f
+#define PLAYER_HEALTH 20.0f
+#define ENEMY_HEALTH 10.0f
+#define BULLET_DAMAGE 5.0f
+#define PLAYER_SPEED 3.0f
+#define ENEMY_SPEED 5.0f
+#define PLAYER_SHOOT_COOLDOWN 0.1f
+#define ENEMY_SHOOT_COOLDOWN 0.05f
+#define COURT_RADIUS glm::vec2(7.0f, 5.0f)
+#define BULLET_DEVIATION_VALUE 0.1f
 
 
 enum EventStatus
@@ -43,7 +44,10 @@ struct RaidenMode : Mode {
 		
 		// 1 for player, -1 for enemy
 		int shoot_dir = 1;
-		
+
+		// bullet velocity
+		glm::vec2 bullet_velocity = glm::vec2(0.0f, shoot_dir * 1.0f);
+
 		// 0 for player, 1 for enemy
 		int owner = -1;
 
@@ -53,10 +57,14 @@ struct RaidenMode : Mode {
 		Bullet(glm::vec2 pos, float speed) : bullet_position(pos), bullet_speed(speed) {};
 	};
 
-	struct Enemy {
-		glm::vec2 enemy_position = glm::vec2(0);
-		glm::vec2 enemy_radius = glm::vec2(0);
+	//------ Enemy Struct ------
+	struct Enemy
+	{
+		glm::vec2 enemy_position = glm::vec2(0.0f, COURT_RADIUS.y - 0.5f);
+		glm::vec2 enemy_radius = glm::vec2(0.15f, 0.3f);
 		float curr_enemy_shoot_cool_down = ENEMY_SHOOT_COOLDOWN;
+		Enemy() {};
+		Enemy(glm::vec2 pos) : enemy_position(pos) {};
 	};
 
 	//functions called by main loop:
@@ -66,9 +74,9 @@ struct RaidenMode : Mode {
 
 
 	//------ Raiden Game State -----
-	glm::vec2 court_radius = glm::vec2(7.0f, 5.0f);
 	glm::vec2 fighter_radius = glm::vec2(0.2f, 0.4f);
-	glm::vec2 bot_fighter = glm::vec2(-court_radius.x + 0.5f, 0.0f);
+	glm::vec2 bot_fighter = glm::vec2(0.0f, -COURT_RADIUS.y + 0.5f);
+	glm::vec4 player_collision_box = glm::vec4(0);
 	int curr_status = EventStatus::none;
 	float curr_player_shoot_cool_down = PLAYER_SHOOT_COOLDOWN;
 	std::vector<Bullet> all_bullets;
@@ -77,6 +85,10 @@ struct RaidenMode : Mode {
 	void execute_event(float elapsed);
 	void player_shoot();
 	void update_bullet(float elapsed);
+	void generate_enemies();
+	bool check_collision(const std::vector<glm::vec2>& points, const glm::vec4& box);
+
+
 
 	//----- opengl assets / helpers ------
 

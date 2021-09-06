@@ -96,6 +96,11 @@ RaidenMode::RaidenMode() {
 
 		GL_ERRORS(); //PARANOIA: print out any OpenGL errors that may have happened
 	}
+
+	// Generate Enemies
+	{
+		generate_enemies();
+	}
 }
 
 RaidenMode::~RaidenMode() {
@@ -109,6 +114,10 @@ RaidenMode::~RaidenMode() {
 
 	glDeleteTextures(1, &white_tex);
 	white_tex = 0;
+}
+
+void RaidenMode::generate_enemies() {
+	all_enemies.push_back(Enemy());
 }
 
 bool RaidenMode::handle_event(SDL_Event const& evt, glm::uvec2 const& window_size) {
@@ -169,8 +178,13 @@ void RaidenMode::execute_event(float elapsed) {
 		}
 	}
 
-	if (movement != glm::vec2(0))
+	if (movement != glm::vec2(0)) {
 		bot_fighter += glm::normalize(movement) * elapsed * PLAYER_SPEED;
+		player_collision_box = glm::vec4(bot_fighter.x - fighter_radius.x, 
+										bot_fighter.x + fighter_radius.x,
+										bot_fighter.y - fighter_radius.y - 0.05f,
+										bot_fighter.y + fighter_radius.y);
+	}
 }
 
 void RaidenMode::player_shoot() {
@@ -179,7 +193,7 @@ void RaidenMode::player_shoot() {
 		int index = bullet_pool.front();
 		bullet_pool.pop_front();
 		all_bullets[index].bullet_position = glm::vec2(bot_fighter.x, bot_fighter.y + fighter_radius.y + 0.05f);
-		all_bullets[index].bullet_speed = 7.0f;
+		all_bullets[index].bullet_velocity = glm::vec2(0.0f, all_bullets[index].shoot_dir * 1.0f);
 		all_bullets[index].bullet_lifetime = BULLET_LIFETIME;
 		all_bullets[index].in_bullet_pool = false;
 	}
@@ -190,16 +204,88 @@ void RaidenMode::player_shoot() {
 	}
 }
 
+bool RaidenMode::check_collision(const std::vector<glm::vec2>& points, const glm::vec4& box) {
+	for (int i = 0; i < points.size(); i++)
+	{
+		if (points[i].x >= player_collision_box[0] && points[i].x <= player_collision_box[1]
+			&& points[i].y >= player_collision_box[2] && points[i].y <= player_collision_box[3])
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void RaidenMode::update_bullet(float elapsed) {
 	for (int i=0; i<all_bullets.size(); i++)
 	{
 		Bullet& b = all_bullets[i];
-		b.bullet_position.y += b.bullet_speed * b.shoot_dir * elapsed;
-		b.bullet_lifetime -= elapsed;
+		if (b.in_bullet_pool)
+			continue;
+
 		if (b.bullet_lifetime <= 0 && !b.in_bullet_pool)
 		{
 			bullet_pool.push_back(i);
 			b.in_bullet_pool = true;
+		}
+		else
+		{
+			b.bullet_position += b.bullet_speed * b.bullet_velocity * elapsed;
+			if (b.bullet_position.y > COURT_RADIUS.y - b.bullet_radius.y)
+			{
+				b.bullet_position.y = COURT_RADIUS.y - b.bullet_radius.y;
+				if (b.bullet_velocity.y > 0.0f)
+				{
+					b.bullet_velocity.y = -b.bullet_velocity.y;
+					b.bullet_velocity.x = BULLET_DEVIATION_VALUE;
+				}
+			}
+			if (b.bullet_position.y < -COURT_RADIUS.y + b.bullet_radius.y)
+			{
+				b.bullet_position.y = -COURT_RADIUS.y + b.bullet_radius.y;
+				if (b.bullet_velocity.y < 0.0f)
+				{
+					b.bullet_velocity.y = -b.bullet_velocity.y;
+					b.bullet_velocity.x = -BULLET_DEVIATION_VALUE;
+				}
+			}
+
+			if (b.bullet_position.x > COURT_RADIUS.x - b.bullet_radius.x)
+			{
+				b.bullet_position.x = COURT_RADIUS.x - b.bullet_radius.x;
+				if (b.bullet_velocity.x > 0.0f)
+				{
+					b.bullet_velocity.x = -b.bullet_velocity.x;
+					b.bullet_velocity.y = BULLET_DEVIATION_VALUE;
+				}
+			}
+			if (b.bullet_position.x < -COURT_RADIUS.x + b.bullet_radius.x)
+			{
+				b.bullet_position.x = -COURT_RADIUS.x + b.bullet_radius.x;
+				if (b.bullet_velocity.x < 0.0f)
+				{
+					b.bullet_velocity.x = -b.bullet_velocity.x;
+					b.bullet_velocity.y = -BULLET_DEVIATION_VALUE;
+				}
+			}
+
+			// ------ Check Collision ------ //
+			{
+				glm::vec2 p1 = glm::vec2(b.bullet_position.x - b.bullet_radius.x, b.bullet_position.y);
+				glm::vec2 p2 = glm::vec2(b.bullet_position.x + b.bullet_radius.x, b.bullet_position.y);
+				glm::vec2 p3 = glm::vec2(b.bullet_position.x, b.bullet_position.y + b.bullet_radius.y);
+				glm::vec2 p4 = glm::vec2(b.bullet_position.x, b.bullet_position.y - b.bullet_radius.y);
+
+				std::vector<glm::vec2> points = { p1,p2,p3,p4 };
+				if (check_collision(points, player_collision_box))
+				{
+					bullet_pool.push_back(i);
+					b.in_bullet_pool = true;
+					std::cout << "Player hit" << std::endl;
+				}
+			}
+
+			b.bullet_lifetime -= elapsed;
 		}
 	}
 }
@@ -215,21 +301,23 @@ void RaidenMode::update(float elapsed) {
 	update_bullet(elapsed);
 
 	//clamp fighters to court:
-	bot_fighter.x = std::max(bot_fighter.x, -court_radius.x + fighter_radius.x);
-	bot_fighter.x = std::min(bot_fighter.x, court_radius.x - fighter_radius.x);
-	bot_fighter.y = std::max(bot_fighter.y, -court_radius.y + fighter_radius.y);
-	bot_fighter.y = std::min(bot_fighter.y, court_radius.y - fighter_radius.y);
+	bot_fighter.x = std::max(bot_fighter.x, -COURT_RADIUS.x + fighter_radius.x);
+	bot_fighter.x = std::min(bot_fighter.x, COURT_RADIUS.x - fighter_radius.x);
+	bot_fighter.y = std::max(bot_fighter.y, -COURT_RADIUS.y + fighter_radius.y);
+	bot_fighter.y = std::min(bot_fighter.y, COURT_RADIUS.y - fighter_radius.y);
 	
 
-
 	//---- collision handling ----
+	
+
 }
 
 void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 	//some nice colors from the course web page:
 	#define HEX_TO_U8VEC4( HX ) (glm::u8vec4( (HX >> 24) & 0xff, (HX >> 16) & 0xff, (HX >> 8) & 0xff, (HX) & 0xff ))
 	const glm::u8vec4 bg_color = HEX_TO_U8VEC4(0x191716ff);
-	const glm::u8vec4 fg_color = HEX_TO_U8VEC4(0xf2d2b6ff);
+	const glm::u8vec4 player_color = HEX_TO_U8VEC4(0xf2d2b6ff);
+	const glm::u8vec4 enemy_color = HEX_TO_U8VEC4(0xbb4430ff);
 	const glm::u8vec4 shadow_color = HEX_TO_U8VEC4(0xf2ad94ff);
 	const std::vector< glm::u8vec4 > trail_colors = {
 		HEX_TO_U8VEC4(0xf2ad9488),
@@ -272,20 +360,30 @@ void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 		vertices.emplace_back(glm::vec3(center.x, center.y-radius.x, 0.0f), color, glm::vec2(0.5f, 0.5f));
 	};
 
-	auto draw_figher = [&]()
+	auto draw_figher = [&](const glm::vec2& pos, const glm::vec2& radius, const glm::u8vec4& color, const int is_player)
 	{
-		draw_diamond(bot_fighter, fighter_radius, fg_color);
-		glm::vec2 rect1_pos(bot_fighter.x-fighter_radius.x, bot_fighter.y-fighter_radius.y*0.7f);
-		glm::vec2 rect2_pos(bot_fighter.x+fighter_radius.x, bot_fighter.y-fighter_radius.y*0.7f);
-		draw_rectangle(rect1_pos, glm::vec2(0.05f, 0.05f), fg_color);
-		draw_rectangle(rect2_pos, glm::vec2(0.05f, 0.05f), fg_color);
+		draw_diamond(pos, radius, color);
+		glm::vec2 rect1_pos(pos.x-radius.x, pos.y-radius.y*0.7f * is_player);
+		glm::vec2 rect2_pos(pos.x+radius.x, pos.y-radius.y*0.7f * is_player);
+		float back_wings_length = is_player == 1 ? 0.05f : 0.05f * 0.75f;
+		draw_rectangle(rect1_pos, glm::vec2(back_wings_length, back_wings_length), color);
+		draw_rectangle(rect2_pos, glm::vec2(back_wings_length, back_wings_length), color);
 	};
 
 	auto draw_bullets = [&]()
 	{
 		for (const auto& b : all_bullets)
 		{
-			draw_rectangle(b.bullet_position, b.bullet_radius, fg_color);
+			if (!b.in_bullet_pool)
+				draw_rectangle(b.bullet_position, b.bullet_radius, player_color);
+		}
+	};
+
+	auto draw_enemies = [&]()
+	{
+		for (const auto& e : all_enemies)
+		{
+			draw_figher(e.enemy_position, e.enemy_radius, enemy_color, -1);
 		}
 	};
 
@@ -293,22 +391,23 @@ void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 
 	glm::vec2 s = glm::vec2(0.0f,-shadow_offset);
 
-	//draw_rectangle(glm::vec2(-court_radius.x-wall_radius, 0.0f)+s, glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), shadow_color);
-	//draw_rectangle(glm::vec2( court_radius.x+wall_radius, 0.0f)+s, glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), shadow_color);
-	//draw_rectangle(glm::vec2( 0.0f,-court_radius.y-wall_radius)+s, glm::vec2(court_radius.x, wall_radius), shadow_color);
-	//draw_rectangle(glm::vec2( 0.0f, court_radius.y+wall_radius)+s, glm::vec2(court_radius.x, wall_radius), shadow_color);
+	//draw_rectangle(glm::vec2(-COURT_RADIUS.x-wall_radius, 0.0f)+s, glm::vec2(wall_radius, COURT_RADIUS.y + 2.0f * wall_radius), shadow_color);
+	//draw_rectangle(glm::vec2( COURT_RADIUS.x+wall_radius, 0.0f)+s, glm::vec2(wall_radius, COURT_RADIUS.y + 2.0f * wall_radius), shadow_color);
+	//draw_rectangle(glm::vec2( 0.0f,-COURT_RADIUS.y-wall_radius)+s, glm::vec2(COURT_RADIUS.x, wall_radius), shadow_color);
+	//draw_rectangle(glm::vec2( 0.0f, COURT_RADIUS.y+wall_radius)+s, glm::vec2(COURT_RADIUS.x, wall_radius), shadow_color);
 	draw_diamond(bot_fighter+s, fighter_radius, shadow_color);
 
 	//solid objects:
 
 	//walls:
-	//draw_rectangle(glm::vec2(-court_radius.x-wall_radius, 0.0f), glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), fg_color);
-	//draw_rectangle(glm::vec2( court_radius.x+wall_radius, 0.0f), glm::vec2(wall_radius, court_radius.y + 2.0f * wall_radius), fg_color);
-	//draw_rectangle(glm::vec2( 0.0f,-court_radius.y-wall_radius), glm::vec2(court_radius.x, wall_radius), fg_color);
-	//draw_rectangle(glm::vec2( 0.0f, court_radius.y+wall_radius), glm::vec2(court_radius.x, wall_radius), fg_color);
+	//draw_rectangle(glm::vec2(-COURT_RADIUS.x-wall_radius, 0.0f), glm::vec2(wall_radius, COURT_RADIUS.y + 2.0f * wall_radius), fg_color);
+	//draw_rectangle(glm::vec2( COURT_RADIUS.x+wall_radius, 0.0f), glm::vec2(wall_radius, COURT_RADIUS.y + 2.0f * wall_radius), fg_color);
+	//draw_rectangle(glm::vec2( 0.0f,-COURT_RADIUS.y-wall_radius), glm::vec2(COURT_RADIUS.x, wall_radius), fg_color);
+	//draw_rectangle(glm::vec2( 0.0f, COURT_RADIUS.y+wall_radius), glm::vec2(COURT_RADIUS.x, wall_radius), fg_color);
 
 	//Game objects:
-	draw_figher();
+	draw_figher(bot_fighter, fighter_radius, player_color, 1);
+	draw_enemies();
 	draw_bullets();
 
 
@@ -316,12 +415,12 @@ void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 
 	//compute area that should be visible:
 	glm::vec2 scene_min = glm::vec2(
-		-court_radius.x - 2.0f * wall_radius - padding,
-		-court_radius.y - 2.0f * wall_radius - padding
+		-COURT_RADIUS.x - 2.0f * wall_radius - padding,
+		-COURT_RADIUS.y - 2.0f * wall_radius - padding
 	);
 	glm::vec2 scene_max = glm::vec2(
-		court_radius.x + 2.0f * wall_radius + padding,
-		court_radius.y + 2.0f * wall_radius + padding
+		COURT_RADIUS.x + 2.0f * wall_radius + padding,
+		COURT_RADIUS.y + 2.0f * wall_radius + padding
 	);
 
 	//compute window aspect ratio:
