@@ -117,14 +117,26 @@ bool RaidenMode::handle_event(SDL_Event const& evt, glm::uvec2 const& window_siz
 	case SDLK_UP:
 		curr_status = evt.type == SDL_KEYDOWN ? curr_status|EventStatus::is_up : curr_status & ~EventStatus::is_up;
 		break;
+	case SDLK_w:
+		curr_status = evt.type == SDL_KEYDOWN ? curr_status | EventStatus::is_up : curr_status & ~EventStatus::is_up;
+		break;
 	case SDLK_DOWN:
 		curr_status = evt.type == SDL_KEYDOWN ? curr_status|EventStatus::is_down : curr_status & ~EventStatus::is_down;
+		break;
+	case SDLK_s:
+		curr_status = evt.type == SDL_KEYDOWN ? curr_status | EventStatus::is_down : curr_status & ~EventStatus::is_down;
 		break;
 	case SDLK_LEFT:
 		curr_status = evt.type == SDL_KEYDOWN ? curr_status|EventStatus::is_left : curr_status & ~EventStatus::is_left;
 		break;
+	case SDLK_a:
+		curr_status = evt.type == SDL_KEYDOWN ? curr_status | EventStatus::is_left : curr_status & ~EventStatus::is_left;
+		break;
 	case SDLK_RIGHT:
 		curr_status = evt.type == SDL_KEYDOWN ? curr_status|EventStatus::is_right : curr_status & ~EventStatus::is_right;
+		break;
+	case SDLK_d:
+		curr_status = evt.type == SDL_KEYDOWN ? curr_status | EventStatus::is_right : curr_status & ~EventStatus::is_right;
 		break;
 	case SDLK_SPACE:
 		curr_status = evt.type == SDL_KEYDOWN ? curr_status | EventStatus::is_shoot : curr_status & ~EventStatus::is_shoot;
@@ -138,13 +150,13 @@ void RaidenMode::execute_event(float elapsed) {
 
 	glm::vec2 movement(0);
 	if (curr_status & EventStatus::is_down)
-		movement.y -= bot_fighter_speed.y * elapsed;
+		movement.y -= 1.0f;
 	if (curr_status & EventStatus::is_up)
-		movement.y += bot_fighter_speed.y * elapsed;
+		movement.y += 1.0f;
 	if (curr_status & EventStatus::is_left)
-		movement.x -= bot_fighter_speed.x * elapsed;
+		movement.x -= 1.0f;
 	if (curr_status & EventStatus::is_right)
-		movement.x += bot_fighter_speed.x * elapsed;
+		movement.x += 1.0f;
 	if (curr_status & EventStatus::is_shoot) {
 		if (curr_player_shoot_cool_down > 0)
 		{
@@ -153,22 +165,42 @@ void RaidenMode::execute_event(float elapsed) {
 		else
 		{
 			player_shoot();
-			curr_player_shoot_cool_down = player_shoot_cool_down;
+			curr_player_shoot_cool_down = PLAYER_SHOOT_COOLDOWN;
 		}
 	}
-	glm::normalize(movement);
-	bot_fighter += movement;
+
+	if (movement != glm::vec2(0))
+		bot_fighter += glm::normalize(movement) * elapsed * PLAYER_SPEED;
 }
 
 void RaidenMode::player_shoot() {
-	Bullet b(glm::vec3(bot_fighter.x, bot_fighter.y + fighter_radius.y + 0.05f, 0), 7.0f);
-	all_bullets.push_back(b);
+	if (!bullet_pool.empty())
+	{
+		int index = bullet_pool.front();
+		bullet_pool.pop_front();
+		all_bullets[index].bullet_position = glm::vec2(bot_fighter.x, bot_fighter.y + fighter_radius.y + 0.05f);
+		all_bullets[index].bullet_speed = 7.0f;
+		all_bullets[index].bullet_lifetime = BULLET_LIFETIME;
+		all_bullets[index].in_bullet_pool = false;
+	}
+	else
+	{
+		Bullet b(glm::vec2(bot_fighter.x, bot_fighter.y + fighter_radius.y + 0.05f), 7.0f);
+		all_bullets.push_back(b);
+	}
 }
 
 void RaidenMode::update_bullet(float elapsed) {
-	for (auto& b : all_bullets)
+	for (int i=0; i<all_bullets.size(); i++)
 	{
+		Bullet& b = all_bullets[i];
 		b.bullet_position.y += b.bullet_speed * b.shoot_dir * elapsed;
+		b.bullet_lifetime -= elapsed;
+		if (b.bullet_lifetime <= 0 && !b.in_bullet_pool)
+		{
+			bullet_pool.push_back(i);
+			b.in_bullet_pool = true;
+		}
 	}
 }
 
@@ -187,6 +219,8 @@ void RaidenMode::update(float elapsed) {
 	bot_fighter.x = std::min(bot_fighter.x, court_radius.x - fighter_radius.x);
 	bot_fighter.y = std::max(bot_fighter.y, -court_radius.y + fighter_radius.y);
 	bot_fighter.y = std::min(bot_fighter.y, court_radius.y - fighter_radius.y);
+	
+
 
 	//---- collision handling ----
 }
@@ -194,7 +228,7 @@ void RaidenMode::update(float elapsed) {
 void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 	//some nice colors from the course web page:
 	#define HEX_TO_U8VEC4( HX ) (glm::u8vec4( (HX >> 24) & 0xff, (HX >> 16) & 0xff, (HX >> 8) & 0xff, (HX) & 0xff ))
-	const glm::u8vec4 bg_color = HEX_TO_U8VEC4(0x193b59ff);
+	const glm::u8vec4 bg_color = HEX_TO_U8VEC4(0x191716ff);
 	const glm::u8vec4 fg_color = HEX_TO_U8VEC4(0xf2d2b6ff);
 	const glm::u8vec4 shadow_color = HEX_TO_U8VEC4(0xf2ad94ff);
 	const std::vector< glm::u8vec4 > trail_colors = {

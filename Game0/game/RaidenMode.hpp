@@ -8,9 +8,16 @@
 #include <vector>
 #include <deque>
 
-/*
- * PongMode is a game mode that implements a single-player game of Pong.
- */
+
+#define BULLET_LIFETIME 5.0f;
+#define PLAYER_HEALTH 20.0f;
+#define ENEMY_HEALTH 10.0f;
+#define BULLET_DAMAGE 5.0f;
+#define PLAYER_SPEED 3.0f;
+#define ENEMY_SPEED 5.0f;
+#define PLAYER_SHOOT_COOLDOWN 0.1f;
+#define ENEMY_SHOOT_COOLDOWN 0.05f;
+
 
 enum EventStatus
 {
@@ -27,17 +34,29 @@ struct RaidenMode : Mode {
 	virtual ~RaidenMode();
 
 	struct Bullet {
-		glm::vec3 bullet_position = glm::vec3(0);
+		glm::vec2 bullet_position = glm::vec2(0);
 		glm::vec2 bullet_radius = glm::vec2(0.05f, 0.1f);
 		float bullet_speed = 5.0f;
+
+		// If in pool or not
+		bool in_bullet_pool = false;
 		
 		// 1 for player, -1 for enemy
 		int shoot_dir = 1;
 		
 		// 0 for player, 1 for enemy
 		int owner = -1;
+
+		// Bullet lifetime
+		float bullet_lifetime = BULLET_LIFETIME;
 		Bullet() {};
-		Bullet(glm::vec3 pos, float speed) : bullet_position(pos), bullet_speed(speed) {};
+		Bullet(glm::vec2 pos, float speed) : bullet_position(pos), bullet_speed(speed) {};
+	};
+
+	struct Enemy {
+		glm::vec2 enemy_position = glm::vec2(0);
+		glm::vec2 enemy_radius = glm::vec2(0);
+		float curr_enemy_shoot_cool_down = ENEMY_SHOOT_COOLDOWN;
 	};
 
 	//functions called by main loop:
@@ -50,11 +69,11 @@ struct RaidenMode : Mode {
 	glm::vec2 court_radius = glm::vec2(7.0f, 5.0f);
 	glm::vec2 fighter_radius = glm::vec2(0.2f, 0.4f);
 	glm::vec2 bot_fighter = glm::vec2(-court_radius.x + 0.5f, 0.0f);
-	glm::vec2 bot_fighter_speed = glm::vec2(3.0f, 3.0f);
 	int curr_status = EventStatus::none;
+	float curr_player_shoot_cool_down = PLAYER_SHOOT_COOLDOWN;
 	std::vector<Bullet> all_bullets;
-	float player_shoot_cool_down = 0.1f;
-	float curr_player_shoot_cool_down = player_shoot_cool_down;
+	std::deque<int> bullet_pool;
+	std::vector<Enemy> all_enemies;
 	void execute_event(float elapsed);
 	void player_shoot();
 	void update_bullet(float elapsed);
