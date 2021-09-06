@@ -9,10 +9,10 @@
 #include <deque>
 
 #define BULLET_LIFETIME 5.0f
-#define PLAYER_HEALTH 20.0f
-#define ENEMY_HEALTH 10.0f
+#define PLAYER_HEALTH 50.0f
+#define ENEMY_HEALTH 5.0f
 #define BULLET_DAMAGE 5.0f
-#define PLAYER_SPEED 3.0f
+#define PLAYER_SPEED 5.0f
 #define ENEMY_SPEED 5.0f
 #define PLAYER_SHOOT_COOLDOWN 0.1f
 #define ENEMY_SHOOT_COOLDOWN 1.0f
@@ -23,6 +23,7 @@
 #define ENEMY_SPAWN_POSSIBILITY 30
 #define ROUTE_CHANGE_RATE 4
 #define ENEMY_SPAWN_COOL_DOWN 0.4f
+#define HEALTH_UI_RADIUS 0.1f
 
 
 static std::mt19937 mt(std::random_device{}());
@@ -110,14 +111,16 @@ struct RaidenMode : Mode {
 	glm::vec4 player_collision_box = glm::vec4(0);
 	int curr_status = EventStatus::none;
 	int route_change_counter = 0;
-	EnemyRoute curr_route;
+	int killed_enemies_num = 0;
+	float game_difficulty_mode = 1.0f;
 	float curr_player_shoot_cool_down = PLAYER_SHOOT_COOLDOWN;
 	float curr_enemy_spawn_cool_down = ENEMY_SPAWN_COOL_DOWN;
+	float player_health = PLAYER_HEALTH;
+	EnemyRoute curr_route;
 	std::vector<Bullet> all_bullets;
 	std::deque<int> bullet_pool;
 	std::vector<Enemy> all_enemies;
 	std::deque<int> enemy_pool;
-	float player_health = PLAYER_HEALTH;
 	void execute_event(float elapsed);
 	void player_shoot();
 	void enemy_shoot(float elapsed);
@@ -125,7 +128,7 @@ struct RaidenMode : Mode {
 	void generate_enemies(float elapsed);
 	void update_enemies(float elapsed);
 	bool check_collision(const std::vector<glm::vec2>& points, const glm::vec4& box);
-	void check_health();
+	void update_game_data();
 	void debug_log();
 
 

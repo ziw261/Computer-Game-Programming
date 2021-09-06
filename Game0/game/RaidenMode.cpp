@@ -117,15 +117,15 @@ void RaidenMode::debug_log() {
 
 void RaidenMode::generate_enemies(float elapsed) {
 
-	if ((all_enemies.size() - enemy_pool.size()) >= ENEMY_MAX_NUM)
+	if ((all_enemies.size() - enemy_pool.size()) >= ENEMY_MAX_NUM + game_difficulty_mode)
 		return;
 	else if (curr_enemy_spawn_cool_down > 0)
 	{
 		curr_enemy_spawn_cool_down -= elapsed;
 		return;
 	}
-	else if ((all_enemies.size() - enemy_pool.size()) <= ENEMY_NEED_SPAWN_NUM
-		|| (mt() % 100) < ENEMY_SPAWN_POSSIBILITY)
+	else if ((all_enemies.size() - enemy_pool.size()) <= ENEMY_NEED_SPAWN_NUM + game_difficulty_mode
+		|| (mt() % 100) < ENEMY_SPAWN_POSSIBILITY + game_difficulty_mode)
 	{
 		if (route_change_counter == ROUTE_CHANGE_RATE - 1)
 		{
@@ -139,7 +139,7 @@ void RaidenMode::generate_enemies(float elapsed) {
 			all_enemies[index].enemy_velocity = glm::vec2(0);
 			all_enemies[index].enemy_collision_box = glm::vec4(0);
 			all_enemies[index].curr_enemy_shoot_cool_down = ENEMY_SHOOT_COOLDOWN;
-			all_enemies[index].enemy_health = ENEMY_HEALTH;
+			all_enemies[index].enemy_health = ENEMY_HEALTH + game_difficulty_mode;
 			all_enemies[index].enemy_route = curr_route;
 			all_enemies[index].route_index = 0;
 			all_enemies[index].is_in_pool = false;
@@ -147,11 +147,16 @@ void RaidenMode::generate_enemies(float elapsed) {
 		else
 		{
 			Enemy e(glm::vec2(0.0f, COURT_RADIUS.y - 0.5f), curr_route);
+			e.enemy_health += game_difficulty_mode;
 			all_enemies.push_back(e);
 		}
 		route_change_counter = (route_change_counter + 1) % ROUTE_CHANGE_RATE;
 		curr_enemy_spawn_cool_down = ENEMY_SPAWN_COOL_DOWN;
 	}
+}
+
+void RaidenMode::update_game_data() {
+	game_difficulty_mode += (killed_enemies_num / 30) * 0.5f;
 }
 
 void RaidenMode::update_enemies(float elapsed) {
@@ -378,8 +383,10 @@ void RaidenMode::update_bullet(float elapsed, int random) {
 				{
 					bullet_pool.push_back(i);
 					b.in_bullet_pool = true;
-					std::cout << "Player hit" << std::endl;
+					//std::cout << "Player hit" << std::endl;
 					player_health -= BULLET_DAMAGE;
+					//if (player_health <= 0)
+
 				}
 
 				if (b.owner == 0)
@@ -396,6 +403,7 @@ void RaidenMode::update_bullet(float elapsed, int random) {
 							{
 								enemy_pool.push_back(index);
 								all_enemies[index].is_in_pool = true;
+								killed_enemies_num++;
 								//std::cout << "enemy dead" << std::endl;
 							}
 						}
@@ -408,23 +416,17 @@ void RaidenMode::update_bullet(float elapsed, int random) {
 	}
 }
 
-void RaidenMode::check_health() {
-	//size_t length = all_enemies.size() - 1;
-	//for (size_t i = length; i >= 0; i--)
-	//{
-	//	if (all_enemies[i].enemy_health <= 0)
-	//	{
-	//		all_enemies.erase(all_enemies.begin() + i);
-	//		i--;
-	//	}
-	//}
-}
-
 void RaidenMode::update(float elapsed) {
 
 	//static std::mt19937 mt(std::random_device{}()); //mersenne twister pseudo-random number generator
 
 	//debug_log();
+
+	if (player_health <= 0){
+		generate_enemies(elapsed);
+		update_enemies(elapsed);
+		return;
+	}
 
 	// Execute Keyboard event
 	execute_event(elapsed);
@@ -439,12 +441,12 @@ void RaidenMode::update(float elapsed) {
 	bot_fighter.y = std::max(bot_fighter.y, -COURT_RADIUS.y + fighter_radius.y);
 	bot_fighter.y = std::min(bot_fighter.y, COURT_RADIUS.y - fighter_radius.y);
 	
-
 	// Enemy
 	generate_enemies(elapsed);
 	update_enemies(elapsed);
 	enemy_shoot(elapsed);
-	check_health();
+
+	update_game_data();
 }
 
 void RaidenMode::draw(glm::uvec2 const &drawable_size) {
@@ -454,6 +456,12 @@ void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 	const glm::u8vec4 player_color = HEX_TO_U8VEC4(0xf2d2b6ff);
 	const glm::u8vec4 enemy_color = HEX_TO_U8VEC4(0xbb4430ff);
 	const glm::u8vec4 shadow_color = HEX_TO_U8VEC4(0xf2ad94ff);
+	// Green, good
+	const glm::u8vec4 health_color_g = HEX_TO_U8VEC4(0x16c1c4ff);
+	// Yello, soso
+	const glm::u8vec4 health_color_y = HEX_TO_U8VEC4(0xfdde9aff);
+	// Red, not good
+	const glm::u8vec4 health_color_r = HEX_TO_U8VEC4(0xda3d19ff);
 	const std::vector< glm::u8vec4 > trail_colors = {
 		HEX_TO_U8VEC4(0xf2ad9488),
 		HEX_TO_U8VEC4(0xf2897288),
@@ -510,7 +518,10 @@ void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 		for (const auto& b : all_bullets)
 		{
 			if (!b.in_bullet_pool)
-				draw_rectangle(b.bullet_position, b.bullet_radius, player_color);
+			{
+				const glm::u8vec4& bullet_color = b.owner == 0 ? player_color : enemy_color;
+				draw_rectangle(b.bullet_position, b.bullet_radius, bullet_color);
+			}
 		}
 	};
 
@@ -523,28 +534,36 @@ void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 		}
 	};
 
+	auto draw_health = [&]()
+	{
+		if (player_health <= 0)
+			return;
+
+		float health_propertion = player_health / PLAYER_HEALTH;
+		float difference = (1.0f - health_propertion) * COURT_RADIUS.x;
+		glm::vec2 health_bar_pos = glm::vec2(0 - difference, -COURT_RADIUS.y-1.5f*HEALTH_UI_RADIUS-padding/2.0f); 
+		glm::vec2 health_bar_radius = glm::vec2((COURT_RADIUS.x + padding) * health_propertion, padding + 1.5f*HEALTH_UI_RADIUS);
+
+		glm::u8vec4 health_color = health_propertion > 0.6f ? health_color_g : 
+									health_propertion > 0.4f ? health_color_y:
+									health_color_r;
+
+		draw_rectangle(health_bar_pos, health_bar_radius, health_color);
+	};
+
 	//shadows for everything (except the trail):
 
 	glm::vec2 s = glm::vec2(0.0f,-shadow_offset);
 
-	//draw_rectangle(glm::vec2(-COURT_RADIUS.x-wall_radius, 0.0f)+s, glm::vec2(wall_radius, COURT_RADIUS.y + 2.0f * wall_radius), shadow_color);
-	//draw_rectangle(glm::vec2( COURT_RADIUS.x+wall_radius, 0.0f)+s, glm::vec2(wall_radius, COURT_RADIUS.y + 2.0f * wall_radius), shadow_color);
-	//draw_rectangle(glm::vec2( 0.0f,-COURT_RADIUS.y-wall_radius)+s, glm::vec2(COURT_RADIUS.x, wall_radius), shadow_color);
-	//draw_rectangle(glm::vec2( 0.0f, COURT_RADIUS.y+wall_radius)+s, glm::vec2(COURT_RADIUS.x, wall_radius), shadow_color);
-	draw_diamond(bot_fighter+s, fighter_radius, shadow_color);
-
-	//solid objects:
-
-	//walls:
-	//draw_rectangle(glm::vec2(-COURT_RADIUS.x-wall_radius, 0.0f), glm::vec2(wall_radius, COURT_RADIUS.y + 2.0f * wall_radius), fg_color);
-	//draw_rectangle(glm::vec2( COURT_RADIUS.x+wall_radius, 0.0f), glm::vec2(wall_radius, COURT_RADIUS.y + 2.0f * wall_radius), fg_color);
-	//draw_rectangle(glm::vec2( 0.0f,-COURT_RADIUS.y-wall_radius), glm::vec2(COURT_RADIUS.x, wall_radius), fg_color);
-	//draw_rectangle(glm::vec2( 0.0f, COURT_RADIUS.y+wall_radius), glm::vec2(COURT_RADIUS.x, wall_radius), fg_color);
 
 	//Game objects:
-	draw_figher(bot_fighter, fighter_radius, player_color, 1);
+	if (player_health > 0){
+		draw_figher(bot_fighter, fighter_radius, player_color, 1);
+		draw_diamond(bot_fighter+s, fighter_radius, shadow_color);
+		draw_bullets();
+	}
 	draw_enemies();
-	draw_bullets();
+	draw_health();
 
 
 	//------ compute court-to-window transform ------
@@ -552,7 +571,7 @@ void RaidenMode::draw(glm::uvec2 const &drawable_size) {
 	//compute area that should be visible:
 	glm::vec2 scene_min = glm::vec2(
 		-COURT_RADIUS.x - 2.0f * wall_radius - padding,
-		-COURT_RADIUS.y - 2.0f * wall_radius - padding
+		-COURT_RADIUS.y - 2.0f * wall_radius - padding - 3.0f * HEALTH_UI_RADIUS
 	);
 	glm::vec2 scene_max = glm::vec2(
 		COURT_RADIUS.x + 2.0f * wall_radius + padding,

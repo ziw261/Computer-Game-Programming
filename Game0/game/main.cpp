@@ -142,6 +142,9 @@ int main(int argc, char **argv) {
 						px.a = 0xff;
 					}
 					save_png(filename, glm::uvec2(w,h), data.data(), LowerLeftOrigin);
+				} else if (evt.type == SDL_KEYDOWN && evt.key.keysym.sym == SDLK_r) {
+					Mode::set_current(nullptr);
+					Mode::set_current(std::make_shared< RaidenMode >());
 				}
 			}
 			if (!Mode::current) break;
